@@ -20,7 +20,7 @@ def get_ai_response(user_input):
 
     # 2. Gemini API (安定版の書き方)
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash-lite')
         response = model.generate_content(user_input)
         return response.text
     except Exception as e:
