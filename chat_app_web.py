@@ -4,9 +4,12 @@ import datetime
 import pytz
 import google.generativeai as genai  # ここを import google.generativeai に修正
 
-# APIキーの設定
-API_KEY = os.environ.get('GEMINI_API_KEY')
-genai.configure(api_key=API_KEY)
+# --- 1. APIキーの設定 (Streamlit Cloud用) ---
+if "GEMINI_API_KEY" in st.secrets:
+    api_key = st.secrets["GEMINI_API_KEY"]
+    genai.configure(api_key=api_key)
+else:
+    st.error("Streamlitの管理画面で GEMINI_API_KEY を設定してね！")
 
 def get_ai_response(user_input):
     # 1. ルールベース（時刻など）
