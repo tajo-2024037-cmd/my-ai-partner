@@ -2,14 +2,14 @@ import streamlit as st
 import google.generativeai as genai
 import os
 
-# --- 1. APIキーの設定 (Streamlit Cloud用) ---
+# --- 1. APIキーの設定 ---
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
 else:
-    st.error("Streamlitの管理画面で GEMINI_API_KEY を設定してね！")
+    st.error("StreamlitのSecretsに GEMINI_API_KEY を設定してください。")
 
-# --- 2. UIデザイン (タイトルサイズを調整) ---
+# --- 2. UIデザイン（タイトルをコンパクトに） ---
 st.set_page_config(page_title="My AI Partner", layout="centered")
 
 st.markdown("""
@@ -19,7 +19,7 @@ st.markdown("""
         font-family: 'Hiragino Sans', sans-serif;
         color: #666666;
         text-align: center;
-        font-size: 0.9rem; /* サイズを半分程度に調整 */
+        font-size: 0.9rem; /* タイトルサイズを以前の半分に固定 */
         font-weight: bold;
         padding-bottom: 8px;
         margin-bottom: 20px;
@@ -30,16 +30,17 @@ st.markdown("""
     <div class="main-title">My AI Partner</div>
 """, unsafe_allow_html=True)
 
-# モデルの設定 (最新の2.0 Flash-liteを使用)
-model = genai.GenerativeModel('models/gemini-2.0-flash-lite')
+# --- 3. モデルの設定 (最新の Gemini 2.5 Flash を指定) ---
+# 2.5シリーズは安定性が高く、無料枠のエラー(429)も出にくい設計です。
+model = genai.GenerativeModel('gemini-2.5-flash')
 
-# --- 3. 会話履歴の管理 ---
+# --- 4. 会話履歴の管理とクリア機能 ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# サイドバーにクリアボタンを設置
 with st.sidebar:
-    if st.button("会話履歴をクリア"):
+    st.title("Settings")
+    if st.button("会話履歴をリセット"):
         st.session_state.messages = []
         st.rerun()
 
@@ -48,39 +49,36 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# --- 4. チャット入力と性格判定 ---
-if prompt := st.chat_input("話しかけてみてね..."):
+# --- 5. 入力と最新の性格判定 ---
+if prompt := st.chat_input("メッセージを入力..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # 履歴をコンテキストとして追加（直近2件）
+    context = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages[-3:-1]])
+
+    # 共通ルール（絵文字抑制）
+    base_rule = "回答はタメ口で。敬語禁止。絵文字は1回答につき1つまで。短文で答えて。"
+
+    # 性格判定
     p = prompt.lower()
-    context = ""
-    for m in st.session_state.messages[-2:]:
-        context += f"{m['role']}: {m['content']}\n"
-
-    base_rule = "回答はすべて親しみやすいタメ口で。敬語禁止。絵文字は1回答につき1〜2個に絞って。"
-
-    # 性格判定ロジック
-    if any(k in p for k in ["なぜ", "理由", "教え", "解説", "方法"]):
-        char_setting = f"{base_rule} あなたは【情熱的な先生】。要点を絞って。冒頭：🎓"
-    elif any(k in p for k in ["頑張る", "目標", "やる気", "挫折"]):
-        char_setting = f"{base_rule} あなたは【熱血コーチ】。短い言葉で力強く応援。冒頭：🔥"
-    elif any(k in p for k in ["つまらない", "疲れた", "飽きた", "自由"]):
-        char_setting = f"{base_rule} あなたは【自由奔放な旅人】。短い一言で。冒頭：🌍"
-    elif any(k in p for k in ["悩み", "悲しい", "相談"]):
-        char_setting = f"{base_rule} あなたは【温かい先輩】。現実的な短文で。冒頭：🌸"
+    if any(k in p for k in ["なぜ", "方法", "教え"]):
+        char_setting = f"{base_rule} 知的な先生として簡潔に。 冒頭:🎓"
+    elif any(k in p for k in ["目標", "頑張る", "やる気"]):
+        char_setting = f"{base_rule} 熱血コーチとして一言で励まして。 冒頭:🔥"
+    elif any(k in p for k in ["疲れ", "自由", "旅"]):
+        char_setting = f"{base_rule} 自由な旅人として。悟ったような短文で。 冒頭:🌍"
+    elif any(k in p for k in ["悩み", "相談", "悲しい"]):
+        char_setting = f"{base_rule} 優しい先輩として寄り添って。 冒頭:🌸"
     else:
-        char_setting = f"{base_rule} あなたは【親友】。短文でノリ良く。冒頭：✨"
+        char_setting = f"{base_rule} 仲の良い親友として。 冒頭:✨"
 
     with st.chat_message("assistant"):
         try:
-            full_prompt = f"{base_rule}\n\n設定: {char_setting}\n\n会話履歴:\n{context}\n\n最新入力: {prompt}"
+            full_prompt = f"{char_setting}\n\n会話履歴:\n{context}\n\n入力: {prompt}"
             response = model.generate_content(full_prompt)
             st.markdown(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
-            if "429" in str(e):
-                st.error("ちょっと話しすぎちゃったみたい。1分くらい待ってからまた話しかけてね！")
-            else:
-                st.error(f"エラーが発生しました: {e}")
+            st.error("現在、AIが少し休憩しているみたい。1分後にまた話しかけてみて！")
